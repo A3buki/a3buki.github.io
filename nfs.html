@@ -1,0 +1,380 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    Для работы с nfs необходимо установить следующие пакеты :
+
+apt-get install nfs-kernel-server
+(apt-get install nfs-server)
+apt-get install nfs-common
+apt-get install autofs
+
+Управляется через systemctl.
+
+Основы NFS : команды, синтаксис и файлы конфигураций.
+
+NFS Commands
+
+Exportfs  -  provide file systems for export to clients ( позволяет нам предоставлять файловые системы для экспорта клиентам.)
+                   sudo exportfs server:/data
+                   sudo exportfs  -a
+mount - Mount позволяет нам файловую систему используя клиент NFS.
+              опции : mount nfserver :
+                             nfserver - позволяет нам указать конкретную версию NFS.
+                             noacl - игнорировать все acl правила и листы.
+                             Noexec  - отключает возможность выполнения (исполнения X)
+                             Nosuid -  ограничивает использование Двоичные файлы SUID в доле.
+                             port - Порт позволяет нам указать номер порта.
+                             Rsize и wsize - указывают максимум размер для чтения и записи в килобайтах в одной операции чтения или записи NFS.
+                             sec=mode - устанавливает режим безопасности Kerberos.
+                             tcp/udp - выбирает транспортный протокол. Tcp всегда рекомендуется.
+
+nfsiostat - который обеспечивает различные операции ввода / вывода статистика по монтированию NFS.
+Nfsstat - предоставляет статистику NFS и RPC.
+Mountstats - показывает статистику монтирования.
+rpcinfo and showmounts - не нужны для четвертой версии NFS.Для более старых версий они показывают Информация о преобразователе портов RPC и NFS серверов и монтирование статистика удаленных хостов.
+
+NFS Files
+
+/etc/exports - файл существует только на сервере (nfs-kernel-server) и содержит определения для шар экспортируемых клиентам.
+/etc/eports.d/*exports - содержит файлы конечного монтирования в точечном экспорте.
+/var/lib/nfs/etab - список доступных шар.
+/etc/nfsmount.conf - конфигурационный конфиг клиента для монтирования шар.
+                                  Nfsmount.conf - имеет секции :
+                                                                                                        mount - опции для специфического NFS монтирования
+                                                                                                        server - можно указать параметры монтирования  NFS сервера ()
+                                                                                                        global - опции для всех NFS монтирований
+/etc/fstab - Это таблица смонтированных дисков при загрузке.
+/etc/mtab - Это таблица смонтированных дисков.
+/etc/sysconfig/nfs - сервер и клиент стартап конфигурационные файлы. (CentOS)
+
+В /etc/exports
+                             export     host1(options)     host2(options)     host3(options)
+
+
+Стандартные опции /etc/exports :
+                                                                          ro/rw - чтение / запись. (по умолчанию только ro - чтение).
+                                                                          sync/async - синхронизация, которая может быть отменена асинхронностью
+                                                                          wdelay/no_wdelay - Wdelay задерживает запись на диск так что несколько записей может
+быть сделано за одну операцию.
+                                                                          root_squash/no_root_squash/all_squash - Указав no_root_squash, пользователь root на стороне клиента будет иметь root-доступ на стороне сервера.Это, конечно, не рекомендуется. Вы также можете изменить это поведение раздавив всех пользователей с помощью all_squash.В случае, если мы используем root_squash или all_squash, клиент раздавлен nfs_nobody account по умолчанию. Если мы хотим выбрать другая группа пользователей вместо учетной записи nfs_nobody,мы можем использовать anonuid = или anonguid = затем следует номер пользователя или группы. Если нам нужно отключить NFS для списка контроля доступа, мы можем указать no_acl.
+                                                                          sec = [ sys | krb5 | krb5i | krb5p ] - встроенная опция безопасности в NFS v4,  sys - Это использует локальные UID и GID номера для клиентов клиентов. krb5* - Kerberos проверка, Kerberos с проверкой целостности и Kerberos с проверкой целостности и шифрование данных.
+                                                                          pnfs - включает параллельные расширения nfs. Это позволяет клиенту обойти сервер и выполнить
+ввод /вывод напрямую на устройстве хранения. 
+
+Стандартный синтаксис монтирования : mount -t nfs servername:/exportpath /mountpath
+
+Установка и настройка
+Откроем доступ для nfs в fiewall
+         firewall-cmd --permanent --add-service nfs
+         firewall-cmd --reload
+
+Запустим nfs-server
+                                                                
+     systemctl start nfs-server
+     systemctl enable nfs-server
+     systemctl status nfs-server
+
+Посмотрим вывод  состояние процессов nfs и rpc:
+
+     ps aux | egrep 'nfs|rpc'         
+
+Теперь необходимо посмотреть и убедиться, что у нас корректно резолвиться имя или работает DNS.
+
+Создадим катлог для экспорта:
+         mkdir /home/usershare 
+
+Откроем на редактирование /etc/exports
+             vim /etc/exports
+          Добавим туда нашу usershare (orion имя клиента но делаем на сервере, если вместо orion указать * то доступ будет всем):
+                                            /home/usershare     orion(rw) 
+Теперь экспортируем запись командой:
+                        exportfs -avr  (данная команда экспортирует запись на orion)
+
+Проверим это через /var/lib/nfs/etab:
+              cat /var/lib/nfs/etab
+получим вывод /home/usershaer orion (rw,sync................).... . В строке будет значения описанные выше, например anonuid=65534, кто это можно узнать командой :
+                                         grep 65543 /etc/passwd 
+Мы получим вывод пользователей.
+
+Так же необходимо убедиться что каталог /home/usershare принадлежит пользавателю, если это не так то, необходимо сменить права:
+                        chown abak:abak /home/usershare
+                        ls -ld /home/usershaer
+
+Теперь можно зайти на orion т.к. мы осуществили туда экспорт.
+Пакеты необходимые для работы с nfs на стороне клиента.
+apt-get install nfs-common
+apt-get install nfs-utils
+
+Создадим каталог для монтирования usershare c nembus :
+              mkdir /home/usermount
+И премонтируем usershare в usermount:
+              mount -t nfs nembus:/home/usershare /home/usermount
+Теперь проверим примонтрование командой mount:
+              mount - выдаст в конце каталог который был премонтирован. Т.е. наш экспорт удачно прионтировался.
+
+NFS Export Troubleshooting ( Обнаружение ошибок и проблем экспорта)
+
+Есть несколько вещей для устранения неполадок. Поскольку мы используем имена хостов, им нужно разрешить правильные IP-адреса/ Дважды проверьте это в файлах / etc / host на обеих машинах.
+
+Также убедитесь, что Служба NFS-сервера работает.
+ На клиенте используйте команду :
+                                                                             showmount -e nembus  - Выводит список экспортированых шар с nembus.
+
+Прорвете настройки firewall-d.
+
+NFS Client Options
+
+hard/soft - Жесткие или мягкие монтирования, это поведение после истечения времени ожидания запроса NFS. Если указать hard - то повторы на обновления шар будут постоянными, если soft клиент может получить times out request.
+
+retrans - количество повторных передач попробовать, прежде чем мягкое крепление не даст результата.
+
+rsize и wsize - являются максимальные размеры в килобайтах отправляемых в одной NFS операции чтения или записи. Максимум для Linux
+в настоящее время один мегабайт.
+
+ac - устанавливает, может ли клиент использовать атрибуты файла кэша или нет. По умолчанию это кеш.
+FG и BG - определяет, что случается, если монтирование не удается. В режиме fg или переднем плане, это терпит неудачу почти сразу. В фоновом режиме, или фон режим, он разветвляется процесс который постоянно пытается подняться. Если в каталоге есть подкаталог, который не примонтирован сейчас, то BG будет ждать пока он появиться и примонтирует его а FG сделает это 1 раз.
+
+retry - это количество времени что NFS попытается смонтировать. По умолчанию для переднего плана
+монтируется за две минуты.Для фонового крепления почти неделя.
+
+sec=mode - выбирает режим безопасности. Мы используем это, чтобы выбрать
+локальные UID или Kerberos.
+
+sync/async - синхронизация, которая может быть отменена асинхронностью. C sync синхронизацией
+записи принудительно на диск прежде чем IO возвращается пользователю.С асинхронным, он пишет асинхронно.
+
+_netdev -пытается смонтировать устройство  только после того, как стартанет сеть .
+
+nfsvers - устанавливает версию NFS. Если это не установлено, сервер и клиент договориться о новой версии для использования самостоятельно.
+
+remount - осуществит перемонтирование.
+
+ro/rw - чтение / запись. (по умолчанию только ro - чтение). Монтирует только для чтения или для чтения/запись.
+
+suid или nosuid - разрешает suid или запрещает suid опцией nosuid.
+
+user or nouser - позволяет или запрещает обычным пользователям акцию монтирования.
+
+auto or noauto - указывает автоматически монтируется при загрузке. Так же необходимо указать в /etc/fstab или systemd.mount
+
+exec or noexec - позволяет или запрещает двоичные файлы (исполняемые).
+
+defaults -  По умолчанию  устанавливает suid, dev, exec, auto, nouser, and async.
+
+Мы можем передовать опции через опцию -o :
+
+Сначала отмантируем нашу шару на клиенте :
+               umount /home/usermount
+И примонтируем шару заново с опциями:
+               mount -t nfs -o nfserver=4.2 nembus:/home/usershare /home/usermount
+ Потом например еще с опциями remount, nosuid, nouser
+              mount -t nfs -o remount,nfserver=4.2,nosuid,nouser nembus:/home/usershare /home/usermount
+Теперь можно занести данный диск для автоподключения в /etc/fstab:
+              vim /etc/fstab
+                                            В самом конце файла добавить: 
+                                                                                                                     nembus:/home/usershare /home/usermount     nfs     nfsver=4,nosuid,nouser,_netdev     0 0
+                                                                                                                   
+Если диск сетевой, то его монтирование не произойдет пока не подыматься сеть, для этого можно и нужно использовать опцию _netdev.
+
+Командой :
+                        mount -a  - мы автоматически перезагрузим /etc/fstab и шара приматируеться с указными опциями в /etc/fstab
+
+Теперь настроим Autofs. Это даст возможность монтировать файловые ресурсы, только тогда когда они нам нужны, так как вариант c _netdev, может весьма затруднить быстрый старт системы и это начнет Вас рано или поздно раздражать.  Поэтому используют Autofs.
+
+     apt-get install autofs
+
+После установки, в /etc/fstab закоментируем нашу строку:
+                                                                                                        #nembus:/home/usershare /home/usermount     nfs     nfsver=4,nosuid,nouser,_netdev     0 0
+
+
+
+Autofs
+
+Теперь перейдом в auto.master файл и откроем его на редактирование. Это будет инструктировать авторов смотреть в слэше и т.д. а также автоматическая точка для информация о прямых отображениях монтируемых файловых систем в auto.direct:
+    vim /etc/auto.master
+Занесением в его конец значения  :
+                                                                             /-     /etc/auto.direct
+
+Сохраним. И откроем (создадим) на редактирование auto.direct:
+    vim /etc/auto.direct
+Добавим нашу шару и точку монтирования:
+                                                                                                   /home/usermount nembus:/home/useshare
+Сохраним.
+Остановим autofs:
+                                       systemctl stop autofs
+Отмонтируем шару:
+                                           umount /home/usermount
+Проверим вывод:
+                                       mount
+Посмотрим дисик:
+                                            df (или lsblk).
+Теперь остановим  и запустим autofs :
+                                                           systemctl stop autofs
+                                                           systemctl start autofs
+После этого, вывод df и mount должны показать прмонтированую шару с nembus.
+
+
+Мониторинг.
+                                                                     
+nfsstat - показывает статистику  дает инфу к анализу по nfs и rpc
+rpcinfo -  не требуеться для nfs4.
+cat /proc/self/mountstats - выводит информацию о монтировании.
+nfsiostat - отобразит статистку чтение/запись - если у нас autofs то надо обновить комадой ls /home/usermount, т.к. autofs отключается.
+mountstats - выводит статистику по монтированию.
+
+NFS каталог с правами root( т.е. запись руту в каталог будет разрешён ).
+
+На сервере nembus создадим новый каталог:
+
+mkdir /home/rootshare
+
+Добавим разрешения в firewall-d
+    firewall-cmd --permanent --add-service nfs
+    firewall-cmd --reload
+Запустим сервер nfs:
+    systemctl start nfs-server
+    systemctl enable nfs-server
+Создадим экспорт шары:
+                                                         vim /etc/exportfs
+и добавим туда:
+                                                          /home/rootshare orion(rw,no_root_squash)
+Теперь поделимся экспортом командой :
+          exportfs -avr
+
+Затем переходим на клиента orion.
+
+Создадим директорию для монтирования:
+          mkdir /home/rootmount
+И примонтируем туда rootshare:
+          mount -t nfs nembus:/home/rootshare /home/rootmount
+Проверим выводы команды :
+                                                                 mount
+должны увидеть примонтированый каталог rootmount.
+Для проверки создадим файл 1.txt и проверим его права:
+touch /home/rootmount 1.txt
+ls -l home/rootmount
+Права на файл 1.txt должны быть root:root.
+
+Групповой NFS ресурс.
+
+
+На сервере nembus создадим новый каталог:
+          mkdir /home/groupshare
+Затем добавим нужного нам пользователя из /etc/passwd:
+          cat /etc/passwd :
+ Выберем нужного пользователя и его id group например 1001 - запомним это.
+ Или создать пользователей через GUI - например userx.
+
+Создадим группу groupcolab с id 6000:
+          groupadd -g 6000 groupcolab
+Добавим в эту группу нужных пользователей:
+          usermod -a -G groupcolab abak
+          usermod -a -G groupcolab userx
+Проверить причастность к группе можно :
+          cat /etc/group
+Либо все это через GUI интерфейс можно сделать.
+Теперь изменим права пользователя и группы на нашу шару - /home/groupshare:
+
+                    chown nobody:groupcolab /home/groupshare 
+                    chmod 2770 /home/groupshare
+                     ls -ld /home/groupshare
+drwxrws---. 2 nobody groupcolab ...........
+
+Разрешить nfs в firewall-d:
+                         firewall-cmd --permanent --add-service nfs
+                         firewall-cmd --reload
+
+Запустим сервер nfs:
+                        systemctl start nfs-server
+                        systemctl enable nfs-server
+Создадим экспорт шары:
+                                                         vim /etc/exportfs
+и добавим туда:
+                                                          /home/groupshare orion(rw,no_root_squash)
+Теперь поделимся экспортом командой :
+          exportfs -avr
+
+Затем переходим на клиента orion.
+
+Создадим точку монтирования:
+mkdir /home/groupmount
+
+Создадим нужных пользователей:
+          useradd abak
+          useradd userx ( можно через gui).
+Сверимся с /etc/passwd в части совпадения uid:
+              cat /etc/passwd
+Задать пароль для abak и userx:
+              passwd abak
+              passwd userx
+
+Создадим точно такую же группу как на серврер groupcolab с id 6000:
+          groupadd -g 6000 groupcolab
+Добавим в эту группу нужных пользователей:
+          usermod -a -G groupcolab abak
+          usermod -a -G groupcolab userx
+Проверить причастность к группе можно :
+          cat /etc/group
+Либо все это через GUI интерфейс можно сделать.
+          
+Примонтируем rootshare в groupmount:
+          mount -t nfs nembus:/home/groupshare /home/groupmount
+Проверим вывод:
+                                       mount
+Затем попытаться создать файлы от разных пользователей.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+The first thing to do is get the NFS mount exported and the relevant options required to make it all go noted. In my case, I've got NFS4 running on my server and I've exported one path such that only my little Brix is able to attach to it. I'm not covering setting up an NFS server within this post.
+Here's what my export looks like on my NFS server.
+/mnt/things 172.16.24.199(rw,sync,no_subtree_check,all_squash,anonuid=1000,anongid=1000)
+As you can see, one server is permitted to attach to the path /mnt/things using a single IP address. For more information on the options being used please refer to the NFS documentation found here.
+On the client host
+install some packages.
+# apt-get install nfs-client
+load the nfs kernel module.
+# modprobe nfs
+I'm also going to make loading the nfs kernel module persistent across reboots.
+# echo NFS | tee -a /etc/modules
+Create a systemd mount unit file
+This unit file MUST contain the path within the name using hyphens instead of slashes. In my case, I will be mounting the NFS export at /mnt/things so my file name will be mnt-things.mount. The mount file itself will be stored at /etc/systemd/system/ here's the full path to the file /etc/systemd/system/mnt-things.mount.
+Within the the mount unit file, add the following sections/entries:
+[Unit]
+Description=Things devices
+After=network.target
+
+[Mount]
+What=172.16.24.192:/mnt/things
+Where=/mnt/things
+Type=nfs
+Options=_netdev,auto
+
+[Install]
+WantedBy=multi-user.target
+These few lines give the unit file a description, ensure that it's only started after networking is available, mounts the NFS export 172.16.24.192:/mnt/things to /mnt/things using an nfs type, and makes sure the mount is ready before starting any other machines (VMs, Containers, etc).
+Start your mount (service?)!
+
+
+
+
+
+
+
+
+</body>
+</html>
